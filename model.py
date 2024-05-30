@@ -3,6 +3,10 @@ from typing import Any
 import cv2
 from ultralytics import YOLO
 
+class FreshFruitNotSupportedException(Exception):
+    """Raised when some fruits cannot be analyzed it's freshness"""
+    pass
+
 class FruitClass(Enum):
     PEACH      = 1
     PEAR       = 2
