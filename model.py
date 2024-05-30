@@ -104,4 +104,4 @@ model_regressions = {
     FruitClass.APPLE: RegressionModel('')
 }
 
-infererence_model = InferenceModel() 
+inference_model = InferenceModel() 
