@@ -1,0 +1,6 @@
+converted_images
+__pycache__
+test.py
+*.jpg
+*.png
+*.jpeg
