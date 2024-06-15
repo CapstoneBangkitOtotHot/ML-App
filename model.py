@@ -2,19 +2,24 @@ from enum import Enum
 from typing import Any
 import cv2
 from ultralytics import YOLO
+import pprint
+import tensorflow as tf
+import numpy as np
 
+if __name__ == '__main__':
+    from encode import ndarray_to_base64
+    from metadata import *
+else:
+    from .encode import ndarray_to_base64
+    from .metadata import *
 class FreshFruitNotSupportedException(Exception):
     """Raised when some fruits cannot be analyzed it's freshness"""
     pass
 
-class FruitClass(Enum):
-    PEACH      = 1
-    PEAR       = 2
-    BANANA     = 3
-    APPLE      = 4
-    STRAWBERRY = 5
-    SAPODILLA  = 6
-    MANGO      = 7
+from inspect import getsourcefile
+from os.path import abspath, dirname, join
+
+base_path = dirname(abspath(getsourcefile(lambda:0)))
 
 class InferenceModel():
     """
@@ -43,41 +48,51 @@ class InferenceModel():
         model = InferenceModel
         result = model(data)
         """
-        results = self.model_classification.predict(image)
+        result = self.model_classification.predict(image, conf=0.5)[0]
+
+        res = []
 
         # TODO: OpenCV cut to bounding box - DONE
-        # TODO: Sort by confidence and only get the highest confidence - IN PROGRESS
-        # TODO: Feed yolo output to matching freshness model - IN PROGRESS
-        for result in results:
-            # Extract the Boxes object
-            boxes = result.boxes
+        # TODO: Sort by confidence and only get the highest confidence - CHANGED
+        # TODO: Feed yolo output to matching freshness model - DONE
+        boxes = result.boxes
 
-            # Iterate through each box
-            for i in range(len(boxes)):
-                # Each box contains (x1, y1, x2, y2, confidence, class)
-                x1, y1, x2, y2 = boxes.xyxy[i]
-                conf = boxes.conf[i]
-                cls = boxes.cls[i]
-                fruit_class = FruitClass(cls.item())
-                # Convert to integer
-                x1, y1, x2, y2 = map(int, [x1.item(), y1.item(), x2.item(), y2.item()])
+        # Iterate through each box
+        for i in range(len(boxes)):
+            # Each box contains (x1, y1, x2, y2, confidence, class)
+            x1, y1, x2, y2 = boxes.xyxy[i]
+            conf = float(boxes.conf[i].item())
+            cls = int(boxes.cls[i].item())
+            fruit_class = FruitClass(cls)
+            # Convert to integer
+            x1, y1, x2, y2 = map(int, [x1.item(), y1.item(), x2.item(), y2.item()])
 
-                # Crop the image using the bounding box coordinates
-                cropped_image = image[y1:y2, x1:x2]
+            # Crop the image using the bounding box coordinates
+            cropped_image = image[y1:y2, x1:x2]
 
-                model_regression = model_regressions[fruit_class]
-                freshness = model_regression(cropped_image)
+            print(model_regressions.keys())
+
+            model_regression = model_regressions[fruit_class]
+
+            freshness = model_regression(cropped_image)
+            if freshness:
+                freshness = float(freshness[0, 0])
+
+            res.append(
+                {
+                    # ada jika classification berhasil
+                    "class"      : cls,
+                    "cropped_img": cropped_image,
+                    "confidence" : conf,
+
+                    "freshness"  : freshness,
+                }
+            )
+
         return {
-            # pasti ada
             "orig_img"   : image,
 
-            # ada jika classification berhasil
-            "class"      : cls,
-            "cropped_img": cropped_image,
-            "confidence" : conf,
-
-
-            "freshness"  : freshness,
+            "inferences": res,
         }
 
 
@@ -91,21 +106,70 @@ class ClassificationModel(YOLO):
         super().__init__(path + '/models/classification_model.pt')
 
     # Future custom intermediate function
+    
 
+@tf.keras.utils.register_keras_serializable()
+def custom_loss(y_true, y_pred):
+    # Customized Mean Squared Error (MSE) to reflect the range of labels
+    return tf.reduce_mean(tf.square(y_true - y_pred))
+
+# Custom metric
+@tf.keras.utils.register_keras_serializable()
+def custom_metric(y_true, y_pred):
+    # Customized Mean Absolute Error (MAE) to reflect the range of labels
+    diff = tf.abs(y_true - y_pred)
+    return tf.reduce_mean(tf.minimum(diff, 20))
+                 
 
 class RegressionModel():
     def __init__(self, model_path) -> None:
-        ...
+        print(model_path)
+        self.model_path = model_path
+        if (model_path != ''):
+            self.model = tf.keras.models.load_model(
+                            model_path,  
+                            custom_objects={
+                                'custom_loss': custom_loss, 
+                                'custom_metric': custom_metric
+            })
+        else:
+            self.model = None
+
+    def preprocess_image(self, image):
+        resized_image = cv2.resize(image, (360, 360))
+        normalized_image = resized_image/255
+        add_none_dim = np.expand_dims(normalized_image, axis=0)
+        return add_none_dim
 
     def __call__(self, image) -> Any:
-        return 1
+        print(self.model_path)
+        if self.model:
+
+            image = self.preprocess_image(image)
+            return self.model.predict(image)
+        
+        return None
 
 # Create model for each fruit
 model_regressions = {
+    FruitClass.TOMATO: RegressionModel(join(base_path, 'models/tomato.keras')),
+    FruitClass.MANGO: RegressionModel(join(base_path, 'models/mango.keras')),
+    FruitClass.SAPODILLA: RegressionModel(join(base_path, 'models/sapodilla.keras')),
+    FruitClass.APPLE: RegressionModel(join(base_path, 'models/apple.keras')),
+    FruitClass.PEACH: RegressionModel(''),
     FruitClass.BANANA: RegressionModel(''),
-    FruitClass.MANGO: RegressionModel(''),
-    FruitClass.SAPODILLA: RegressionModel(''),
-    FruitClass.APPLE: RegressionModel('')
+    FruitClass.STRAWBERRY: RegressionModel(''),
 }
 
 inference_model = InferenceModel() 
+
+
+# khusus untuk ML DEBUGGING
+# Hanya dieksekusi jika dieksekusi secara langsung lewat terminal
+# Jika diimport, lewat import x atau from x import, blok kode ini
+# tidak akan dieksekusi
+if __name__ == '__main__':
+    image_path = 'apel2.jpg'
+    image = cv2.imread(image_path)
+
+    print(inference_model(image))
