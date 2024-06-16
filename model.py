@@ -74,9 +74,15 @@ class InferenceModel():
 
             model_regression = model_regressions[fruit_class]
 
-            freshness = model_regression(cropped_image)
-            if freshness:
-                freshness = float(freshness[0, 0])
+            freshness_percentage = model_regression(cropped_image)
+            freshness_days = None
+
+            if freshness_percentage:
+                freshness_percentage = float(freshness_percentage[0, 0])
+
+                fruit_metadata = FruitMetadata[fruit_class]
+                freshness_days = freshness_percentage * (fruit_metadata['range']/2)
+            
 
             res.append(
                 {
@@ -86,7 +92,8 @@ class InferenceModel():
                     "cropped_img": cropped_image,
                     "confidence" : conf,
 
-                    "freshness"  : freshness,
+                    "freshness_percentage"  : freshness_percentage,
+                    "freshness_days"  : freshness_days,
                 }
             )
 
