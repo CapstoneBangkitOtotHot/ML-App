@@ -81,7 +81,8 @@ class InferenceModel():
             res.append(
                 {
                     # ada jika classification berhasil
-                    "class"      : cls,
+                    "fruit_class" : cls,
+                    "fruit_class_string" : FruitMetadata[fruit_class]['string'],
                     "cropped_img": cropped_image,
                     "confidence" : conf,
 
