@@ -2,14 +2,14 @@ from enum import Enum
 
 
 class FruitClass(Enum):
-    PEACH      = 1
-    PEAR       = 2
-    BANANA     = 3
+    PEACH      = 0
+    PEAR       = 1
+    BANANA     = 2
+    STRAWBERRY = 3
     APPLE      = 4
-    STRAWBERRY = 5
-    SAPODILLA  = 6
-    MANGO      = 7
-    TOMATO     = 8
+    SAPODILLA  = 5
+    MANGO      = 6
+    TOMATO     = 7
 
 FruitMetadata = {
     FruitClass.PEACH : {
@@ -30,13 +30,13 @@ FruitMetadata = {
     FruitClass.APPLE : {
         'string': 'Apple',
         'range': 20,
-
     },
+    
     FruitClass.STRAWBERRY : {
-        'string': 'Strawberry',
+       'string': 'Strawberry',
         'range': 0,
-
-    },
+    }, 
+   
     FruitClass.SAPODILLA : {
         'string': 'Sapodilla',
         'range': 16,
